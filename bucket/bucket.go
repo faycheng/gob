@@ -32,30 +32,30 @@ func (l *life) IsDead() bool {
 	return time.Since(l.bornTime) > l.duration
 }
 
-type qpsBucket struct {
+type constantBucket struct {
 	*life
-	qps int
+	rate int
 }
 
-func (b *qpsBucket) Get() bool {
+func (b *constantBucket) Get() bool {
 	if !b.IsBorn() {
 		b.Born()
 	}
 	if b.IsDead() {
 		return false
 	}
-	time.Sleep(time.Second / time.Duration(b.qps))
+	time.Sleep(time.Second / time.Duration(b.rate))
 	return true
 }
 
-type qpsUpBucket struct {
+type upBucket struct {
 	*life
 	low  int
 	high int
 	step int
 }
 
-func (b *qpsUpBucket) Get() bool {
+func (b *upBucket) Get() bool {
 	if !b.IsBorn() {
 		b.Born()
 	}
@@ -69,14 +69,14 @@ func (b *qpsUpBucket) Get() bool {
 	return true
 }
 
-type qpsDownBucket struct {
+type downBucket struct {
 	*life
 	low  int
 	high int
 	step int
 }
 
-func (b *qpsDownBucket) Get() bool {
+func (b *downBucket) Get() bool {
 	if !b.IsBorn() {
 		b.Born()
 	}
@@ -90,12 +90,12 @@ func (b *qpsDownBucket) Get() bool {
 	return true
 }
 
-type qpsRangeBucket struct {
+type rangeBucket struct {
 	idx      int
-	qpsRange []*qpsBucket
+	qpsRange []*constantBucket
 }
 
-func (b *qpsRangeBucket) bucket() *qpsBucket {
+func (b *rangeBucket) bucket() *constantBucket {
 	bucket := b.qpsRange[b.idx]
 	if !bucket.IsBorn() {
 		bucket.Born()
@@ -112,7 +112,7 @@ func (b *qpsRangeBucket) bucket() *qpsBucket {
 	return bucket
 }
 
-func (b *qpsRangeBucket) Get() bool {
+func (b *rangeBucket) Get() bool {
 	bucket := b.qpsRange[b.idx]
 	if !bucket.IsBorn() {
 		bucket.Born()
