@@ -30,10 +30,8 @@ func workerOpts() []worker.WorkerOpt {
 	return opts
 }
 
-func gob(args []string) error {
+func gob(pluginPath, taskKey string) error {
 	validateFlags()
-	pluginPath := args[0]
-	taskKey := task.Key(args[1])
 	pluginLoader := plugin.NewPluginLoader(pluginPath)
 	taskSet, err := pluginLoader.Load()
 	if err != nil {
@@ -43,7 +41,7 @@ func gob(args []string) error {
 	for key, task := range taskSet {
 		taskRegistry.Register(key, task)
 	}
-	targetTask, ok := taskRegistry.Get(taskKey)
+	targetTask, ok := taskRegistry.Get(string(taskKey))
 	if !ok {
 		return fmt.Errorf("task(%s) not found", taskKey)
 	}
@@ -60,11 +58,17 @@ func main() {
 	var gobCmd = &cobra.Command{
 		Use: "gob [plugin_path] [task]",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return gob(args)
+			if len(args) != 2 {
+				return fmt.Errorf("bad arguments(%+v)", args)
+			}
+			return gob(args[0], args[1])
 		},
 	}
 	flags := gobCmd.PersistentFlags()
-	flags.IntVarP(&rate, "qps", "q", 100, "qps, default 100")
-	flags.IntVarP(&concurrency, "concurrency", "c", 1, "concurrency, default 1")
-	flags.StringVarP(&taskArgs, "data", "d", "{}", "target args in json format, default {}")
+	flags.IntVarP(&rate, "qps", "q", 100, "qps")
+	flags.IntVarP(&concurrency, "concurrency", "c", 1, "concurrency")
+	flags.StringVarP(&taskArgs, "data", "d", "{}", "target args in json format")
+	if err := gobCmd.Execute(); err != nil {
+		panic(err)
+	}
 }
