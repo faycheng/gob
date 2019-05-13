@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"sync"
 
 	"github.com/faycheng/gob/bucket"
 	"github.com/faycheng/gob/task"
@@ -27,12 +28,16 @@ func newQpsWorker(bucket bucket.Bucket, task task.Task, taskArgs interface{}) Wo
 }
 
 func (qw *qpsWorker) Run() {
+	var wg sync.WaitGroup
 	for qw.bucket.Get() {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			err := qw.task.Call(context.TODO(), qw.taskArgs)
 			if err != nil {
 				panic(err)
 			}
 		}()
 	}
+	wg.Wait()
 }
