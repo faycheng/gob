@@ -37,6 +37,15 @@ type ConstantBucket struct {
 	rate int
 }
 
+func NewConstantBucket(rate int, duration time.Duration) Bucket {
+	return &ConstantBucket{
+		rate: rate,
+		life: &life{
+			duration: duration,
+		},
+	}
+}
+
 func (b *ConstantBucket) Get() bool {
 	if !b.IsBorn() {
 		b.Born()

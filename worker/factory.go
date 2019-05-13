@@ -45,7 +45,7 @@ func defaultOpts() *workerOpts {
 	return &workerOpts{
 		mode:     WorkerModeQps,
 		rate:     100,
-		duration: time.Minute,
+		duration: time.Second * 10,
 	}
 }
 
@@ -86,20 +86,20 @@ func NewWorkerFactory() *workerFactory {
 	return &workerFactory{}
 }
 
-func (f *workerFactory) newBucket(opts *workerOpts) (bucket bucket.Bucket, err error) {
+func (f *workerFactory) newBucket(opts *workerOpts) (bucket.Bucket, error) {
 	switch opts.bucket {
 	case BucketModeConstant:
-		return
+		return bucket.NewConstantBucket(opts.rate, opts.duration), nil
 	case BucketModeUp:
-		return
+		return nil, nil
 	case BucketModelDown:
-		return
+		return nil, nil
 	case BucketModeRange:
-		return
+		return nil, nil
 	default:
-		return
+		return nil, nil
 	}
-	return
+	return nil, nil
 }
 
 func (f *workerFactory) NewWorker(task task.Task, taskArgs interface{}, opts ...WorkerOpt) (worker Worker, err error) {
