@@ -1,9 +1,12 @@
 package plugin
 
-import "github.com/faycheng/gob/task"
+import (
+	"context"
+	"github.com/faycheng/gob/task"
+)
 
 type PluginLoader interface {
-	Load() (map[task.Key]task.Task, error)
+	Load() (Plugin, error)
 }
 
 type pluginLoaer struct {
@@ -16,7 +19,14 @@ func NewPluginLoader(path string) PluginLoader {
 	}
 }
 
-func (l *pluginLoaer) Load() (taskSet map[task.Key]task.Task, err error) {
+// TODO: load plugin
+func (l *pluginLoaer) Load() (plugin Plugin, err error) {
+	taskSet = make(map[string]task.Task, 0)
+	taskSet["echo"] = task.NewTask("echo")
+	// TODO: register on_start, on_success... events for collecting metrics
+	taskSet["echo"].Connect(task.OnStart, func(c context.Context, args ...interface{}) error {
+		return nil
+	})
 
 	return
 }

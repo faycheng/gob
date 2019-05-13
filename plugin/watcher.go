@@ -3,7 +3,7 @@ package plugin
 import "github.com/faycheng/gob/task"
 
 type PluginWatcher interface {
-	Watch() (task.Key, task.Task, error)
+	Watch() (string, task.Task, error)
 }
 
 type pluginWatcher struct {
@@ -16,7 +16,7 @@ func NewPluginWatcher(root string) PluginWatcher {
 	}
 }
 
-func (w *pluginWatcher) Watch() (key task.Key, task task.Task, err error) {
+func (w *pluginWatcher) Watch() (key string, task task.Task, err error) {
 
 	return
 }
