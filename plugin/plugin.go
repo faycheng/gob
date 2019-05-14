@@ -1,8 +1,9 @@
 package plugin
 
 import (
+	"context"
+	"github.com/faycheng/gob/plugin/server"
 	"github.com/faycheng/gob/task"
-	"google.golang.org/grpc"
 )
 
 type Plugin interface {
@@ -10,19 +11,35 @@ type Plugin interface {
 }
 
 type plugin struct {
-	// NOTE: grpc client
-	client *grpc.ClientConn
-	task   map[string]task.Task
+	name  string
+	path  string
+	tasks map[string]task.Task
 }
 
-func NewPlugin(socket string) Plugin {
-	return &plugin{}
+type PluginConfig struct {
+	name  string
+	path  string
+	tasks []string
 }
 
-// TODO: parse tasks
+func NewPlugin(config *PluginConfig) Plugin {
+	client := server.NewPluginClient(config.path)
+	tasks := make(map[string]task.Task)
+	for _, name := range config.tasks {
+		handle := func(c context.Context, args string) error {
+			// TODO: register task events
+			return client.Call(c, name, args)
+		}
+		tasks[name] = task.NewTask(name, handle)
+	}
+	return &plugin{
+		name:  config.name,
+		path:  config.path,
+		tasks: tasks,
+	}
+}
+
+// TODO: thread-safe
 func (p *plugin) Tasks() (map[string]task.Task, error) {
-	// client.Tasks()
-	// new task
-	// connect events
-	return nil, nil
+	return p.tasks, nil
 }
