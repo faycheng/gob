@@ -26,11 +26,11 @@ func NewPluginClient(path string) *PluginClient {
 	}
 }
 
-func (c *PluginClient) Call(c context.Context, method, args string) (err error) {
+func (c *PluginClient) Call(ctx context.Context, method, args string) (err error) {
 	req := &proto.CallReq{
 		Method: method,
 		Args:   args,
 	}
-	_, err = c.client.Call(c, req)
+	_, err = c.client.Call(ctx, req)
 	return
 }
