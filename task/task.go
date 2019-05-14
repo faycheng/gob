@@ -2,8 +2,6 @@ package task
 
 import (
 	"context"
-	"fmt"
-
 	"github.com/faycheng/goblinker"
 )
 
@@ -23,16 +21,17 @@ type Task interface {
 
 type task struct {
 	key       string
+	handle    func(c context.Context, args string) error
 	onStart   *goblinker.Signal
 	onSuccess *goblinker.Signal
 	onFailure *goblinker.Signal
 	onError   *goblinker.Signal
 }
 
-// TODO: add handler
-func NewTask(key string) Task {
+func NewTask(key string, handle func(c context.Context, args string) error) Task {
 	return &task{
 		key:       key,
+		handle:    handle,
 		onStart:   goblinker.NewSignal(true),
 		onSuccess: goblinker.NewSignal(true),
 		onFailure: goblinker.NewSignal(true),
@@ -57,7 +56,7 @@ func (t *task) Connect(signal Signal, receiver goblinker.Receiver) error {
 }
 
 func (t *task) Call(c context.Context, args interface{}) error {
-
-	fmt.Printf("Task.Call(%+v)\n", args)
-	return nil
+	// TODO: send signal
+	err := t.handle(c, args.(string))
+	return err
 }
