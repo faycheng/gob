@@ -1,8 +1,10 @@
 package plugin
 
 import (
-	"context"
-	"github.com/faycheng/gob/task"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
 )
 
 type PluginLoader interface {
@@ -20,13 +22,25 @@ func NewPluginLoader(path string) PluginLoader {
 }
 
 // TODO: load plugin
+// TODO: wrap error
 func (l *pluginLoaer) Load() (plugin Plugin, err error) {
-	taskSet = make(map[string]task.Task, 0)
-	taskSet["echo"] = task.NewTask("echo")
-	// TODO: register on_start, on_success... events for collecting metrics
-	taskSet["echo"].Connect(task.OnStart, func(c context.Context, args ...interface{}) error {
-		return nil
-	})
-
+	// load plugin config
+	fd, err := os.Open(fmt.Sprintf("%s/plugin.json", l.path))
+	if err != nil {
+		return
+	}
+	defer fd.Close()
+	content, err := ioutil.ReadAll(fd)
+	if err != nil {
+		return
+	}
+	config := new(PluginConfig)
+	err = json.Unmarshal(content, config)
+	if err != nil {
+		return
+	}
+	// TODO: custom plugin path
+	config.path = "/Users/chengfei/Dropbox/workspace/golang/src/github.com/faycheng/gob/example/plugin/echo"
+	plugin = NewPlugin(config)
 	return
 }
