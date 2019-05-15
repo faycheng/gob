@@ -6,6 +6,7 @@ import (
 	"github.com/faycheng/gob/plugin/server"
 	"github.com/faycheng/gob/task"
 	"github.com/sirupsen/logrus"
+	"os"
 	"os/exec"
 )
 
@@ -55,6 +56,8 @@ func (p *plugin) Run() error {
 		return err
 	}
 	cmd := exec.Command(entrypoint)
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
 	go func() {
 		err := cmd.Run()
 		if err != nil {
