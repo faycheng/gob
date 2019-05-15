@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"fmt"
 	"github.com/faycheng/gob/plugin/server"
 	"github.com/faycheng/gob/task"
 	"github.com/sirupsen/logrus"
@@ -48,17 +49,19 @@ func (p *plugin) Tasks() (map[string]task.Task, error) {
 }
 
 func (p *plugin) Run() error {
-	cmd := exec.Command(p.entrypoint)
-	if err := cmd.Start(); err != nil {
+	entrypoint := fmt.Sprintf("%s/entrypoint", p.path)
+	_, err := exec.LookPath(entrypoint)
+	if err != nil {
 		return err
 	}
+	cmd := exec.Command(entrypoint)
 	go func() {
-		err := cmd.Wait()
+		err := cmd.Run()
 		if err != nil {
-			logrus.Errorf("plugin(%s) exit with err: %+v", p.entrypoint, err)
+			logrus.Errorf("plugin(%s/entrypoint.sh) exit with err: %+v", p.path, err)
 			return
 		}
-		logrus.Warnf("plugin(%s) exit", p.entrypoint)
+		logrus.Infof("plugin(%s,entrypoint.sh) exit", p.path)
 	}()
 	return nil
 }
