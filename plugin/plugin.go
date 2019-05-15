@@ -14,40 +14,37 @@ type Plugin interface {
 }
 
 type plugin struct {
-	name       string
-	path       string
-	tasks      map[string]task.Task
-	entrypoint string
+	name  string
+	path  string
+	tasks []string
 }
 
 type PluginConfig struct {
-	name       string `json:"name"`
-	path       string
-	entrypoint string   `json:"entrypoint"`
-	tasks      []string `json:"tasks"`
+	Name  string `json:"Name"`
+	Path  string
+	Tasks []string `json:"Tasks"`
 }
 
 func NewPlugin(config *PluginConfig) Plugin {
-	client := server.NewPluginClient(config.path)
+	return &plugin{
+		name:  config.Name,
+		path:  config.Path,
+		tasks: config.Tasks,
+	}
+}
+
+// TODO: thread-safe
+func (p *plugin) Tasks() (map[string]task.Task, error) {
+	client := server.NewPluginClient("unix:/tmp/gob/test.echo.socket")
 	tasks := make(map[string]task.Task)
-	for _, name := range config.tasks {
+	for _, name := range p.tasks {
 		handle := func(c context.Context, args string) error {
 			// TODO: register on_start, on_success... events for collecting metrics
 			return client.Call(c, name, args)
 		}
 		tasks[name] = task.NewTask(name, handle)
 	}
-	return &plugin{
-		name:       config.name,
-		path:       config.path,
-		tasks:      tasks,
-		entrypoint: config.entrypoint,
-	}
-}
-
-// TODO: thread-safe
-func (p *plugin) Tasks() (map[string]task.Task, error) {
-	return p.tasks, nil
+	return tasks, nil
 }
 
 func (p *plugin) Run() error {
