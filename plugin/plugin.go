@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sync/atomic"
+	"time"
 )
 
 type Plugin interface {
@@ -73,5 +74,6 @@ func (p *plugin) Run() error {
 		}
 		logrus.Infof("plugin(%s,entrypoint.sh) exit", p.path)
 	}()
+	time.Sleep(1 * time.Second)
 	return nil
 }
