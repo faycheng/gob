@@ -11,19 +11,19 @@ type PluginLoader interface {
 	Load() (Plugin, error)
 }
 
-type pluginLoaer struct {
+type pluginLoader struct {
 	path string
 }
 
 func NewPluginLoader(path string) PluginLoader {
-	return &pluginLoaer{
+	return &pluginLoader{
 		path: path,
 	}
 }
 
 // TODO: load plugin
 // TODO: wrap error
-func (l *pluginLoaer) Load() (plugin Plugin, err error) {
+func (l *pluginLoader) Load() (plugin Plugin, err error) {
 	// load plugin config
 	fd, err := os.Open(fmt.Sprintf("%s/plugin.json", l.path))
 	if err != nil {
