@@ -33,11 +33,19 @@ func workerOpts() []worker.WorkerOpt {
 func gob(pluginPath, taskKey string) error {
 	validateFlags()
 	pluginLoader := plugin.NewPluginLoader(pluginPath)
-	taskSet, err := pluginLoader.Load()
+	plugin, err := pluginLoader.Load()
 	if err != nil {
 		return err
 	}
 	taskRegistry := task.NewTaskRegistry()
+	err = plugin.Run()
+	if err != nil {
+		return err
+	}
+	taskSet, err := plugin.Tasks()
+	if err != nil {
+		return err
+	}
 	for key, task := range taskSet {
 		taskRegistry.Register(key, task)
 	}
