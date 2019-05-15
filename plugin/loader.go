@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 type PluginLoader interface {
@@ -16,6 +17,10 @@ type pluginLoader struct {
 }
 
 func NewPluginLoader(path string) PluginLoader {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		panic(err)
+	}
 	return &pluginLoader{
 		path: path,
 	}
@@ -23,7 +28,6 @@ func NewPluginLoader(path string) PluginLoader {
 
 // TODO: wrap error
 func (l *pluginLoader) Load() (plugin Plugin, err error) {
-	// load plugin config
 	fd, err := os.Open(fmt.Sprintf("%s/plugin.json", l.path))
 	if err != nil {
 		return
