@@ -21,7 +21,6 @@ func NewPluginLoader(path string) PluginLoader {
 	}
 }
 
-// TODO: load plugin
 // TODO: wrap error
 func (l *pluginLoader) Load() (plugin Plugin, err error) {
 	// load plugin config
@@ -39,8 +38,7 @@ func (l *pluginLoader) Load() (plugin Plugin, err error) {
 	if err != nil {
 		return
 	}
-	// TODO: custom plugin path
-	config.path = "/Users/chengfei/Dropbox/workspace/golang/src/github.com/faycheng/gob/example/plugin/echo"
+	config.Path = l.path
 	plugin = NewPlugin(config)
 	return
 }
