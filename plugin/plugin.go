@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
+	"sync/atomic"
 )
 
 type Plugin interface {
@@ -16,9 +17,11 @@ type Plugin interface {
 }
 
 type plugin struct {
-	name  string
-	path  string
-	tasks []string
+	name    string
+	path    string
+	tasks   []string
+	running int32
+	client  *server.PluginClient
 }
 
 type PluginConfig struct {
@@ -37,6 +40,9 @@ func NewPlugin(config *PluginConfig) Plugin {
 
 // TODO: thread-safe
 func (p *plugin) Tasks() (map[string]task.Task, error) {
+	if atomic.LoadInt32(&p.running) == 0 {
+		return nil, fmt.Errorf("plugin server isn't running, please invoke plugin.Run before fetching tasks")
+	}
 	client := server.NewPluginClient("unix:/tmp/gob/test.echo.socket")
 	tasks := make(map[string]task.Task)
 	for _, name := range p.tasks {
@@ -58,6 +64,7 @@ func (p *plugin) Run() error {
 	cmd := exec.Command(entrypoint)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
+	atomic.StoreInt32(&p.running, 1)
 	go func() {
 		err := cmd.Run()
 		if err != nil {
