@@ -1,6 +1,8 @@
 package bucket
 
-import "time"
+import (
+	"time"
+)
 
 type Bucket interface {
 	Get() bool
@@ -34,7 +36,10 @@ func (l *life) IsDead() bool {
 
 type ConstantBucket struct {
 	*life
-	rate int
+	rate      int
+	last      time.Time
+	sleepSpan time.Duration
+	sleep     time.Duration
 }
 
 func NewConstantBucket(rate int, duration time.Duration) Bucket {
@@ -43,17 +48,32 @@ func NewConstantBucket(rate int, duration time.Duration) Bucket {
 		life: &life{
 			duration: duration,
 		},
+		sleepSpan: time.Second / time.Duration(rate),
 	}
 }
 
 func (b *ConstantBucket) Get() bool {
+	now := time.Now()
 	if !b.IsBorn() {
 		b.Born()
+		b.last = now
 	}
 	if b.IsDead() {
 		return false
 	}
-	time.Sleep(time.Second / time.Duration(b.rate))
+	// sleep represents how much time we should sleep.
+	// Inspired by github.com/user-go/ratelimit.
+	b.sleep += b.sleepSpan - time.Since(b.last)
+	if b.sleep > 0 {
+		// span: system call time of time.Sleep and time.Add
+		// other: time of caller using
+		// span + other = time.Now().Sub(b.last)
+		time.Sleep(b.sleep)
+		b.last = now.Add(b.sleep)
+		b.sleep = 0
+		return true
+	}
+	b.last = now
 	return true
 }
 
@@ -68,11 +88,14 @@ func (b *UpBucket) Get() bool {
 	if !b.IsBorn() {
 		b.Born()
 	}
-	if b.IsDead() {
-		return false
-	}
+	//if b.IsDead() {
+	//	return false
+	//}
 	step := (b.high - b.low) / b.Age()
 	curQps := b.low + b.Age()*step
+	if curQps >= b.high {
+		return false
+	}
 	curSleep := time.Second / time.Duration(curQps)
 	time.Sleep(curSleep)
 	return true
