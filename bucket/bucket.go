@@ -4,160 +4,66 @@ import (
 	"time"
 )
 
-type Bucket interface {
-	Get() bool
+type Bucket struct {
+	life             Life
+	rate             int
+	sleep            time.Duration
+	lastGenerateTime time.Time
+	lastGetTime      time.Time
+	sequence         Sequence
 }
 
-type life struct {
-	born     bool
-	bornTime time.Time
-	duration time.Duration
-}
-
-func (l *life) Born() {
-	l.born = true
-	l.bornTime = time.Now()
-}
-
-func (l *life) Age() int {
-	return int(time.Since(l.bornTime) / time.Second)
-}
-
-func (l *life) IsBorn() bool {
-	return l.born
-}
-
-func (l *life) IsDead() bool {
-	if !l.born {
-		return true
-	}
-	return time.Since(l.bornTime) > l.duration
-}
-
-type ConstantBucket struct {
-	*life
-	rate      int
-	last      time.Time
-	sleepSpan time.Duration
-	sleep     time.Duration
-}
-
-func NewConstantBucket(rate int, duration time.Duration) Bucket {
-	return &ConstantBucket{
-		rate: rate,
-		life: &life{
-			duration: duration,
-		},
-		sleepSpan: time.Second / time.Duration(rate),
+func NewBucket(l Life, seq Sequence) *Bucket {
+	return &Bucket{
+		life:     l,
+		sequence: seq,
 	}
 }
 
-func (b *ConstantBucket) Get() bool {
-	now := time.Now()
-	if !b.IsBorn() {
-		b.Born()
-		b.last = now
+func (b *Bucket) Rate() (rate int, ok bool) {
+	for !b.life.IsBorn() {
+		time.Sleep(time.Second)
 	}
-	if b.IsDead() {
+	if b.life.IsDead() {
+		return 0, false
+	}
+	if b.lastGenerateTime.IsZero() || time.Since(b.lastGenerateTime) >= time.Second {
+		b.rate = b.sequence.Next()
+		b.lastGenerateTime = time.Now()
+	}
+	for b.rate == 0 {
+		if b.life.IsDead() {
+			return 0, false
+		}
+		time.Sleep(time.Second)
+		b.rate = b.sequence.Next()
+		b.lastGenerateTime = time.Now()
+	}
+	return b.rate, true
+}
+
+func (b *Bucket) Get() bool {
+	rate, ok := b.Rate()
+	if !ok {
 		return false
 	}
+	now := time.Now()
+	if b.lastGetTime.IsZero() {
+		b.lastGetTime = now
+	}
+	sleepSpan := time.Second / time.Duration(rate)
 	// sleep represents how much time we should sleep.
 	// Inspired by github.com/user-go/ratelimit.
-	b.sleep += b.sleepSpan - time.Since(b.last)
+	b.sleep += sleepSpan - time.Since(b.lastGetTime)
 	if b.sleep > 0 {
 		// span: system call time of time.Sleep and time.Add
 		// other: time of caller using
 		// span + other = time.Now().Sub(b.last)
 		time.Sleep(b.sleep)
-		b.last = now.Add(b.sleep)
+		b.lastGetTime = now.Add(b.sleep)
 		b.sleep = 0
 		return true
 	}
-	b.last = now
+	b.lastGetTime = now
 	return true
-}
-
-type UpBucket struct {
-	*life
-	low  int
-	high int
-	step int
-}
-
-func (b *UpBucket) Get() bool {
-	if !b.IsBorn() {
-		b.Born()
-	}
-	//if b.IsDead() {
-	//	return false
-	//}
-	step := (b.high - b.low) / b.Age()
-	curQps := b.low + b.Age()*step
-	if curQps >= b.high {
-		return false
-	}
-	curSleep := time.Second / time.Duration(curQps)
-	time.Sleep(curSleep)
-	return true
-}
-
-type DownBucket struct {
-	*life
-	low  int
-	high int
-	step int
-}
-
-func (b *DownBucket) Get() bool {
-	if !b.IsBorn() {
-		b.Born()
-	}
-	if b.IsDead() {
-		return false
-	}
-	step := (b.high - b.low) / b.Age()
-	curQps := b.high - b.Age()*step
-	curSleep := time.Second / time.Duration(curQps)
-	time.Sleep(curSleep)
-	return true
-}
-
-type RangeBucket struct {
-	idx      int
-	qpsRange []*ConstantBucket
-}
-
-func (b *RangeBucket) bucket() *ConstantBucket {
-	bucket := b.qpsRange[b.idx]
-	if !bucket.IsBorn() {
-		bucket.Born()
-	}
-	if !bucket.IsDead() {
-		return bucket
-	}
-	b.idx++
-	if b.idx == len(b.qpsRange) {
-		return nil
-	}
-	bucket = b.qpsRange[b.idx]
-	bucket.Born()
-	return bucket
-}
-
-func (b *RangeBucket) Get() bool {
-	bucket := b.qpsRange[b.idx]
-	if !bucket.IsBorn() {
-		bucket.Born()
-	}
-	ok := bucket.Get()
-	if ok {
-		return ok
-	}
-	b.idx++
-	if b.idx == len(b.qpsRange) {
-		return false
-	}
-	bucket = b.qpsRange[b.idx]
-	bucket.Born()
-	return bucket.Get()
 }
