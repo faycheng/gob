@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"gob/bucket"
-	"gob/metric"
-	"gob/worker"
+	"github.com/faycheng/gob/bucket"
+	"github.com/faycheng/gob/metric"
+	"github.com/faycheng/gob/worker"
 
 	"github.com/faycheng/gokit/plugin"
 	"github.com/pkg/errors"

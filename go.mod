@@ -1,4 +1,4 @@
-module gob
+module github.com/faycheng/gob
 
 go 1.13
 
