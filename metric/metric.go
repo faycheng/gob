@@ -39,7 +39,7 @@ func WithInfluxDB(addr, username, password string) metricFactoryOpt {
 }
 
 type rollingMetric interface {
-	Value() float64
+	value() float64
 	add(val int64)
 }
 
@@ -51,7 +51,7 @@ func (c *counterMetric) add(val int64) {
 	c.m.Add(val)
 }
 
-func (c *counterMetric) Value() float64 {
+func (c *counterMetric) value() float64 {
 	return float64(c.m.Value())
 }
 
@@ -63,7 +63,7 @@ func (g *gaugeMetric) add(val int64) {
 	g.m.Add(val)
 }
 
-func (g *gaugeMetric) Value() float64 {
+func (g *gaugeMetric) value() float64 {
 	return g.m.(rolling.Aggregation).Avg()
 }
 
@@ -102,7 +102,7 @@ func (f *Factory) NewGauge(name string, tags ...tag) (gauge *Metric, err error) 
 	gauge = &Metric{
 		name:   name,
 		tags:   tags,
-		Metric: m,
+		metric: m,
 	}
 	if f.enableInfluxDB {
 		gauge.influxClient = f.influxClient
@@ -115,7 +115,7 @@ type Metric struct {
 	influxClient client.Client
 	name         string
 	tags         []tag
-	Metric       rollingMetric
+	metric       rollingMetric
 	duration     time.Duration
 	once         sync.Once
 }
@@ -124,7 +124,7 @@ func NewMetric(name string, duration time.Duration, metric rollingMetric, tags .
 	m := &Metric{
 		name:     name,
 		tags:     tags,
-		Metric:   metric,
+		metric:   metric,
 		duration: duration,
 	}
 	go m.run()
@@ -132,7 +132,7 @@ func NewMetric(name string, duration time.Duration, metric rollingMetric, tags .
 }
 
 func (m *Metric) Add(val int64) {
-	m.Metric.add(val)
+	m.metric.add(val)
 }
 
 func (m *Metric) push() {
@@ -142,23 +142,24 @@ func (m *Metric) push() {
 	point, _ := client.NewPoint(
 		m.name,
 		map[string]string{},
-		map[string]interface{}{"value": m.Metric.Value()},
+		map[string]interface{}{"value": m.metric.value()},
 		time.Now().Add(-time.Second),
 	)
 	points.AddPoint(point)
 	err := m.influxClient.Write(points)
 	if err != nil {
-		logrus.Warnf("[Metric] failed to flush in-memory points to influxdb database:%s name:%s err:%+v", "gob", m.name, err)
+		logrus.Warnf("[metric] failed to flush in-memory points to influxdb database:%s name:%s err:%+v", "gob", m.name, err)
 		return
 	}
-	logrus.Infof("[Metric] flush in-memory points to influxdb successfullly  database:%s name:%s", "gob", m.name)
+	logrus.Infof("[metric] flush in-memory points to influxdb successfullly  database:%s name:%s", "gob", m.name)
 }
 
 func (m *Metric) run() {
 	ticker := time.NewTicker(m.duration)
 	for range ticker.C {
 		if m.influxClient == nil {
-			return
+			logrus.Infof("[metric] ts:%s name:%s value:%v", time.Now().Add(-time.Second).Format("2006-01-02 15:04:05"), m.name, m.metric.value())
+			continue
 		}
 		go m.push()
 	}

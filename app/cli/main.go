@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/faycheng/gob/bucket"
-	"github.com/faycheng/gob/metric"
-	"github.com/faycheng/gob/worker"
+	"gob/bucket"
+	"gob/metric"
+	"gob/worker"
+
 	"github.com/faycheng/gokit/plugin"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -44,10 +45,7 @@ var (
 	tsGauge          *metric.Metric
 )
 
-func initInfluxdb(name string) {
-	if !influxdb {
-		return
-	}
+func initMetric(name string) {
 	factory = loadMetricFactory()
 	tag := metric.WithTag("gob.name", name)
 	inCounter, _ = factory.NewCounter("gob.in", tag)
@@ -57,7 +55,10 @@ func initInfluxdb(name string) {
 }
 
 func loadMetricFactory() *metric.Factory {
-	return metric.NewMetricFactory(metric.WithInfluxDB(influxdbAddr, influxdbUser, influxdbPassword))
+	if influxdb {
+		return metric.NewMetricFactory(metric.WithInfluxDB(influxdbAddr, influxdbUser, influxdbPassword))
+	}
+	return metric.NewMetricFactory()
 }
 
 func loadPlugin() (p plugin.Plugin) {
@@ -88,13 +89,8 @@ func loadBucket() *bucket.Bucket {
 	return bucket.NewBucket(life, seq)
 }
 
-func wrapInfluxdb(call plugin.Call) plugin.Call {
+func wrapMetric(call plugin.Call) plugin.Call {
 	return func(ctx context.Context, req interface{}) (reply interface{}, err error) {
-		if !influxdb {
-			return call(ctx, req)
-		}
-		//inCounter.Add(1)
-		//return nil, nil
 		begin := time.Now()
 		inCounter.Add(1)
 		reply, err = call(ctx, req)
@@ -109,7 +105,7 @@ func wrapInfluxdb(call plugin.Call) plugin.Call {
 }
 
 func gob(name string, req interface{}) error {
-	initInfluxdb(name)
+	initMetric(name)
 	plug := loadPlugin()
 	bucket := loadBucket()
 	pool := worker.NewPool()
@@ -117,9 +113,7 @@ func gob(name string, req interface{}) error {
 	if err != nil {
 		return err
 	}
-	if influxdb {
-		call = wrapInfluxdb(call)
-	}
+	call = wrapMetric(call)
 	for bucket.Get() {
 		go func() {
 			r := pool.Get()
