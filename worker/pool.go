@@ -28,7 +28,7 @@ func NewPool() Pool {
 }
 
 func (p *pool) Get() Runner {
-	return p.workers.Get().(Runner)
+	return &runner{}
 }
 
 func (p *pool) Put(w Runner) {

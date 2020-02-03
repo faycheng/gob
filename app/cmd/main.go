@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/faycheng/gob/bucket"
+	"github.com/faycheng/gob/metric"
 	"github.com/faycheng/gob/worker"
 	"github.com/faycheng/gokit/plugin"
 	"github.com/pkg/errors"
@@ -17,18 +19,46 @@ var (
 	soPlugin   string
 	grpcPlugin string
 	grpcAddr   string
-	duration   time.Duration
-	constant   bool
-	constantC  int
-	linear     bool
-	linearA    float64
-	linearB    float64
-	power      bool
-	powerY     float64
-	powerB     float64
-	exp2       bool
-	exp2B      float64
+
+	duration time.Duration
+
+	constant  bool
+	constantC int
+	linear    bool
+	linearA   float64
+	linearB   float64
+	power     bool
+	powerY    float64
+	powerB    float64
+	exp2      bool
+	exp2B     float64
+
+	influxdb         bool
+	influxdbAddr     string
+	influxdbUser     string
+	influxdbPassword string
+	factory          *metric.Factory
+	inCounter        *metric.Metric
+	passCounter      *metric.Metric
+	errCounter       *metric.Metric
+	tsGauge          *metric.Metric
 )
+
+func initInfluxdb(name string) {
+	if !influxdb {
+		return
+	}
+	factory = loadMetricFactory()
+	tag := metric.WithTag("gob.name", name)
+	inCounter, _ = factory.NewCounter("gob.in", tag)
+	passCounter, _ = factory.NewCounter("gob.pass", tag)
+	errCounter, _ = factory.NewCounter("gob.err", tag)
+	tsGauge, _ = factory.NewGauge("gob.ts", tag)
+}
+
+func loadMetricFactory() *metric.Factory {
+	return metric.NewMetricFactory(metric.WithInfluxDB(influxdbAddr, influxdbUser, influxdbPassword))
+}
 
 func loadPlugin() (p plugin.Plugin) {
 	if soPlugin != "" {
@@ -58,13 +88,37 @@ func loadBucket() *bucket.Bucket {
 	return bucket.NewBucket(life, seq)
 }
 
+func wrapInfluxdb(call plugin.Call) plugin.Call {
+	return func(ctx context.Context, req interface{}) (reply interface{}, err error) {
+		if !influxdb {
+			return call(ctx, req)
+		}
+		//inCounter.Add(1)
+		//return nil, nil
+		begin := time.Now()
+		inCounter.Add(1)
+		reply, err = call(ctx, req)
+		if err != nil {
+			errCounter.Add(1)
+			return
+		}
+		passCounter.Add(1)
+		tsGauge.Add(int64(time.Since(begin) / time.Millisecond))
+		return reply, err
+	}
+}
+
 func gob(name string, req interface{}) error {
+	initInfluxdb(name)
 	plug := loadPlugin()
 	bucket := loadBucket()
 	pool := worker.NewPool()
 	call, err := plug.Lookup(name)
 	if err != nil {
 		return err
+	}
+	if influxdb {
+		call = wrapInfluxdb(call)
 	}
 	for bucket.Get() {
 		go func() {
@@ -73,6 +127,7 @@ func gob(name string, req interface{}) error {
 			err := r.Call(call, req)
 			if err != nil {
 				logrus.Error(err)
+				return
 			}
 		}()
 	}
@@ -100,9 +155,27 @@ func main() {
 	flags.StringVarP(&soPlugin, "so", "", "", "")
 	flags.StringVarP(&grpcPlugin, "grpc", "", "", "")
 	flags.StringVarP(&grpcAddr, "grpc.Addr", "", "", "")
+
 	flags.DurationVarP(&duration, "duration", "", time.Second*10, "")
+
 	flags.BoolVarP(&constant, "constant", "", false, "")
 	flags.IntVarP(&constantC, "constant.C", "", 100, "")
+
+	flags.BoolVarP(&linear, "linear", "", false, "")
+	flags.Float64VarP(&linearA, "linear.A", "", 1, "")
+	flags.Float64VarP(&linearB, "linear.B", "", 100, "")
+
+	flags.BoolVarP(&power, "power", "", false, "")
+	flags.Float64VarP(&powerY, "power.Y", "", 1, "")
+	flags.Float64VarP(&powerB, "power.B", "", 100, "")
+
+	flags.BoolVarP(&exp2, "exp2", "", false, "")
+	flags.Float64VarP(&exp2B, "exp2.B", "", 1, "")
+
+	flags.BoolVarP(&influxdb, "influxdb", "", false, "")
+	flags.StringVarP(&influxdbAddr, "influxdb.addr", "", "http://127.0.0.1:8086", "")
+	flags.StringVarP(&influxdbUser, "influxdb.user", "", "", "")
+	flags.StringVarP(&influxdbUser, "influxdb.password", "", "", "")
 	if err := gobCmd.Execute(); err != nil {
 		panic(err)
 	}

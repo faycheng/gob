@@ -6,6 +6,7 @@ import (
 
 	"github.com/faycheng/rolling"
 	"github.com/influxdata/influxdb/client/v2"
+	"github.com/sirupsen/logrus"
 )
 
 type tag struct {
@@ -20,7 +21,7 @@ func WithTag(key string, value string) tag {
 	}
 }
 
-type metricFactoryOpt func(*metricFactory)
+type metricFactoryOpt func(*Factory)
 
 func WithInfluxDB(addr, username, password string) metricFactoryOpt {
 	influxClient, err := client.NewHTTPClient(client.HTTPConfig{
@@ -31,62 +32,134 @@ func WithInfluxDB(addr, username, password string) metricFactoryOpt {
 	if err != nil {
 		panic(err)
 	}
-	return func(factory *metricFactory) {
+	return func(factory *Factory) {
 		factory.enableInfluxDB = true
 		factory.influxClient = influxClient
 	}
-
 }
 
-type metricFactory struct {
+type rollingMetric interface {
+	Value() float64
+	add(val int64)
+}
+
+type counterMetric struct {
+	m rolling.Metric
+}
+
+func (c *counterMetric) add(val int64) {
+	c.m.Add(val)
+}
+
+func (c *counterMetric) Value() float64 {
+	return float64(c.m.Value())
+}
+
+type gaugeMetric struct {
+	m rolling.Metric
+}
+
+func (g *gaugeMetric) add(val int64) {
+	g.m.Add(val)
+}
+
+func (g *gaugeMetric) Value() float64 {
+	return g.m.(rolling.Aggregation).Avg()
+}
+
+type Factory struct {
 	enableInfluxDB bool
 	influxClient   client.Client
 }
 
-func NewMetricFacotry(opts ...metricFactoryOpt) *metricFactory {
-	factory := &metricFactory{}
+func NewMetricFactory(opts ...metricFactoryOpt) *Factory {
+	factory := &Factory{}
 	for _, opt := range opts {
 		opt(factory)
 	}
 	return factory
 }
 
-func (f *metricFactory) NewCounter(tags ...tag) (counter *metric, err error) {
-	timingCounter := rolling.NewTimingCounter(rolling.TimingCounterOpts{
-		Size:           3600,
-		BucketDuration: time.Second,
+func (f *Factory) NewCounter(name string, tags ...tag) (counter *Metric, err error) {
+	rolling := rolling.NewRollingCounter(rolling.RollingCounterOpts{
+		BucketDuration: time.Millisecond * 10,
+		Size:           100,
 	})
-	counter = &metric{
-		tags:   tags,
-		metric: timingCounter,
+	m := &counterMetric{m: rolling}
+	counter = NewMetric(name, time.Second, m, tags...)
+	if f.enableInfluxDB {
+		counter.influxClient = f.influxClient
 	}
-
 	return
 }
 
-func (f *metricFactory) NewGauge(tags ...tag) (gauge *metric, err error) {
-	timingCounter := rolling.NewTimingGauge(rolling.TimingGaugeOpts{
-		Size:           3600,
-		BucketDuration: time.Second,
+func (f *Factory) NewGauge(name string, tags ...tag) (gauge *Metric, err error) {
+	rolling := rolling.NewRollingGauge(rolling.RollingGaugeOpts{
+		BucketDuration: time.Millisecond * 10,
+		Size:           100,
 	})
-	gauge = &metric{
+	m := &gaugeMetric{m: rolling}
+	gauge = &Metric{
+		name:   name,
 		tags:   tags,
-		metric: timingCounter,
+		Metric: m,
 	}
 	if f.enableInfluxDB {
 		gauge.influxClient = f.influxClient
 	}
 	return
-
 }
 
-type metric struct {
+type Metric struct {
 	sync.Mutex
 	influxClient client.Client
+	name         string
 	tags         []tag
-	metric       rolling.Metric
+	Metric       rollingMetric
+	duration     time.Duration
+	once         sync.Once
 }
 
-func (m *metric) Add(val int64) {
-	m.metric.Add(val)
+func NewMetric(name string, duration time.Duration, metric rollingMetric, tags ...tag) *Metric {
+	m := &Metric{
+		name:     name,
+		tags:     tags,
+		Metric:   metric,
+		duration: duration,
+	}
+	go m.run()
+	return m
+}
+
+func (m *Metric) Add(val int64) {
+	m.Metric.add(val)
+}
+
+func (m *Metric) push() {
+	points, _ := client.NewBatchPoints(client.BatchPointsConfig{
+		Database: "gob",
+	})
+	point, _ := client.NewPoint(
+		m.name,
+		map[string]string{},
+		map[string]interface{}{"value": m.Metric.Value()},
+		time.Now().Add(-time.Second),
+	)
+	points.AddPoint(point)
+	err := m.influxClient.Write(points)
+	if err != nil {
+		logrus.Warnf("[Metric] failed to flush in-memory points to influxdb database:%s name:%s err:%+v", "gob", m.name, err)
+		return
+	}
+	logrus.Infof("[Metric] flush in-memory points to influxdb successfullly  database:%s name:%s", "gob", m.name)
+}
+
+func (m *Metric) run() {
+	ticker := time.NewTicker(m.duration)
+	for range ticker.C {
+		if m.influxClient == nil {
+			return
+		}
+		go m.push()
+	}
 }
