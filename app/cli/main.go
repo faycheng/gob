@@ -146,30 +146,30 @@ func main() {
 		},
 	}
 	flags := gobCmd.PersistentFlags()
-	flags.StringVarP(&soPlugin, "so", "", "", "")
-	flags.StringVarP(&grpcPlugin, "grpc", "", "", "")
-	flags.StringVarP(&grpcAddr, "grpc.Addr", "", "", "")
+	flags.StringVarP(&soPlugin, "so", "", "", "path of so plugin, eg: --so=/plugin/so/plugin.so")
+	flags.StringVarP(&grpcPlugin, "grpc", "", "", "binary path of grpc plugin, eg: --grpc=/plugin/grpc/plugin.bin")
+	flags.StringVarP(&grpcAddr, "grpc.addr", "", "", "socket addr of grpc plugin, eg: --grpc.addr=/var/run/gob.grpc.socket")
 
-	flags.DurationVarP(&duration, "duration", "", time.Second*10, "")
+	flags.DurationVarP(&duration, "duration", "", time.Second*10, "benchmark duration, default value is 10s, eg: --duration=10s")
 
-	flags.BoolVarP(&constant, "constant", "", false, "")
-	flags.IntVarP(&constantC, "constant.C", "", 100, "")
+	flags.BoolVarP(&constant, "constant", "", false, "increment benchmark qps with constant formula, f(x)=c, eg: --constant")
+	flags.IntVarP(&constantC, "constant.c", "", 100, "const value, default value is 100, eg: --constant.c=100")
 
-	flags.BoolVarP(&linear, "linear", "", false, "")
-	flags.Float64VarP(&linearA, "linear.A", "", 1, "")
-	flags.Float64VarP(&linearB, "linear.B", "", 100, "")
+	flags.BoolVarP(&linear, "linear", "", false, "increment benchmark qps with linear formula, f(x)=ax+b")
+	flags.Float64VarP(&linearA, "linear.a", "", 1, "linear value, default value is 1, eg: --linear.a=1")
+	flags.Float64VarP(&linearB, "linear.b", "", 100, "base value, default value is 100, eg: --linear.b=100")
 
-	flags.BoolVarP(&power, "power", "", false, "")
-	flags.Float64VarP(&powerY, "power.Y", "", 1, "")
-	flags.Float64VarP(&powerB, "power.B", "", 100, "")
+	flags.BoolVarP(&power, "power", "", false, "increment benchmark qps with power formula, f(x)=x^y+b, eg: --power")
+	flags.Float64VarP(&powerY, "power.y", "", 1, "power value, default value is 1, eg: --power.Y=1")
+	flags.Float64VarP(&powerB, "power.b", "", 100, "base value, default value is 100, eg: --power.b=100")
 
-	flags.BoolVarP(&exp2, "exp2", "", false, "")
-	flags.Float64VarP(&exp2B, "exp2.B", "", 1, "")
+	flags.BoolVarP(&exp2, "exp2", "", false, "increment benchmark qps with exp2 formula, f(x)=2^x+b, eg: --exp2")
+	flags.Float64VarP(&exp2B, "exp2.b", "", 1, "base value, default vlaue is 1, eg: --exp2.b=1")
 
-	flags.BoolVarP(&influxdb, "influxdb", "", false, "")
-	flags.StringVarP(&influxdbAddr, "influxdb.addr", "", "http://127.0.0.1:8086", "")
-	flags.StringVarP(&influxdbUser, "influxdb.user", "", "", "")
-	flags.StringVarP(&influxdbUser, "influxdb.password", "", "", "")
+	flags.BoolVarP(&influxdb, "influxdb", "", false, "capture the benchmark metric, default value is false, eg: --influxdb")
+	flags.StringVarP(&influxdbAddr, "influxdb.addr", "", "http://127.0.0.1:8086", "connection addr of influxdb, default value is http://127.0.0.1:8086, eg: --influxdb.addr=http://127.0.0.1:8086")
+	flags.StringVarP(&influxdbUser, "influxdb.user", "", "", "user name for influxdb auth, eg: --influxdb.user=admin")
+	flags.StringVarP(&influxdbUser, "influxdb.password", "", "", "password for influxdb auth, eg: --influxdb.password=admin")
 	if err := gobCmd.Execute(); err != nil {
 		panic(err)
 	}
